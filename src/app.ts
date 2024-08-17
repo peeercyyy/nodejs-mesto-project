@@ -27,9 +27,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 app.use('/users', userRouter);
 app.use('/cards', cardRouter);
-app.use((req: Request, res: Response) => {
-  return res.status(NOT_FOUND_ERROR_CODE).end();
-});
+app.use((req: Request, res: Response) => res.status(NOT_FOUND_ERROR_CODE).send({ message: 'Page not found' }));
 
 app.listen(3000, () => {
   console.log('listening in port 3000');
