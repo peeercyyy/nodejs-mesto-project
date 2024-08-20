@@ -1,6 +1,7 @@
+import { celebrate, Joi } from 'celebrate';
 import { Router } from 'express';
 import {
-  createUser,
+  getCurrentUser,
   getUserById,
   getUsers,
   updateUser,
@@ -10,13 +11,26 @@ import {
 const router = Router();
 
 router.get('/', getUsers);
+router.get('/me', getCurrentUser);
 
-router.get('/:id', getUserById);
+router.get(
+  '/:id',
+  celebrate({ params: Joi.object().keys({ id: Joi.string().length(24) }) }),
+  getUserById
+);
 
-router.post('/', createUser);
+router.patch(
+  '/me',
+  celebrate({
+    body: Joi.object().keys({ name: Joi.string(), about: Joi.string() }),
+  }),
+  updateUser
+);
 
-router.patch('/me', updateUser);
-
-router.patch('/me/avatar', updateUserAvatar);
+router.patch(
+  '/me/avatar',
+  celebrate({ body: Joi.object().keys({ avatar: Joi.string().uri() }) }),
+  updateUserAvatar
+);
 
 export default router;

@@ -1,57 +1,68 @@
-import { Request, Response } from 'express';
-import {
-  DEFAULT_ERROR_CODE,
-  INVALID_REQUEST_ERROR_CODE,
-  NOT_FOUND_ERROR_CODE,
-  NOT_FOUND_ERROR_NAME,
-} from '../constants';
-import { NotFoundError } from '../error';
+import bcrypt from 'bcryptjs';
+import { NextFunction, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
+import isEmail from 'validator/lib/isEmail';
+import { INVALID_REQUEST_ERROR_CODE, SECRET } from '../constants';
+import { EmailExistError, InvalidRequestError, NotFoundError } from '../error';
 import User, { IUser } from '../models/user';
 
-export const getUsers = (req: Request, res: Response) => User.find({})
-  .then((users) => {
-    res.send(users);
-  })
-  .catch(() => res.status(DEFAULT_ERROR_CODE).send({ message: 'Server error' }));
+export const getUsers = (req: Request, res: Response, next: NextFunction) =>
+  User.find({})
+    .then((users) => {
+      res.send(users);
+    })
+    .catch(next);
 
-export const getUserById = (req: Request, res: Response) => User.findById(req.params.id)
-  .then((user) => {
-    if (!user) {
-      return Promise.reject(new NotFoundError('User not found'));
-    }
-    return res.send(user);
-  })
-  .catch((error) => {
-    if (error.name === NOT_FOUND_ERROR_NAME) {
-      return res
-        .status(NOT_FOUND_ERROR_CODE)
-        .send({ message: error.message });
-    }
-    if (error.name === 'CastError') {
-      return res
-        .status(INVALID_REQUEST_ERROR_CODE)
-        .send({ message: 'Invalid user id' });
-    }
-    return res.status(DEFAULT_ERROR_CODE).send({ message: 'Server error' });
-  });
-
-export const createUser = (req: Request<IUser>, res: Response) => {
-  const { name, about, avatar } = req.body;
-  return User.create({ name, about, avatar })
-    .then((user) => res.send(user))
-    .catch((error) => {
-      if (error.name === 'ValidationError') {
-        return res
-          .status(INVALID_REQUEST_ERROR_CODE)
-          .send({ message: error.message });
+export const getUserById = (req: Request, res: Response, next: NextFunction) =>
+  User.findById(req.params.id)
+    .then((user) => {
+      if (!user) {
+        return Promise.reject(new NotFoundError('User not found'));
       }
-      return res.status(DEFAULT_ERROR_CODE).send({ message: 'Server error' });
+      return res.send(user);
+    })
+    .catch(next);
+
+export const createUser = (
+  req: Request<IUser>,
+  res: Response,
+  next: NextFunction
+) => {
+  const { name, about, avatar, email, password } = req.body;
+  if (!isEmail(email)) {
+    return res
+      .status(INVALID_REQUEST_ERROR_CODE)
+      .send({ message: 'Invalid email' });
+  }
+  return bcrypt
+    .hash(password, 10)
+    .then((hash: string) =>
+      User.create({
+        name,
+        about,
+        avatar,
+        email,
+        password: hash,
+      })
+    )
+    .then((user) => res.send({
+      email: user.email,
+      name: user.name,
+      about: user.about,
+      avatar: user.avatar,
+    }))
+    .catch((err) => {
+      if (err.code === 11000) {
+        return next(new EmailExistError('Email already exist'));
+      }
+      return next(err);
     });
 };
 
 export const updateUser = (
   req: Request<Pick<IUser, 'name' | 'about'>>,
   res: Response,
+  next: NextFunction
 ) => {
   const { name, about } = req.body;
   const userId = req.user._id;
@@ -59,7 +70,7 @@ export const updateUser = (
   return User.findByIdAndUpdate(
     userId,
     { name, about },
-    { new: true, runValidators: true },
+    { new: true, runValidators: true }
   )
     .then((user) => {
       if (!user) {
@@ -68,31 +79,20 @@ export const updateUser = (
 
       return res.send(user);
     })
-    .catch((error) => {
-      if (error.name === NOT_FOUND_ERROR_NAME) {
-        return res
-          .status(NOT_FOUND_ERROR_CODE)
-          .send({ message: error.message });
-      }
-      if (error.name === 'ValidationError') {
-        return res
-          .status(INVALID_REQUEST_ERROR_CODE)
-          .send({ message: error.message });
-      }
-      return res.status(DEFAULT_ERROR_CODE).send({ message: 'Server error' });
-    });
+    .catch(next);
 };
 
 export const updateUserAvatar = (
   req: Request<Pick<IUser, 'avatar'>>,
   res: Response,
+  next: NextFunction
 ) => {
   const { avatar } = req.body;
   const userId = req.user._id;
   return User.findByIdAndUpdate(
     userId,
     { avatar },
-    { new: true, runValidators: true },
+    { new: true, runValidators: true }
   )
     .then((user) => {
       if (!user) {
@@ -101,17 +101,51 @@ export const updateUserAvatar = (
 
       return res.send(user);
     })
-    .catch((error) => {
-      if (error.name === NOT_FOUND_ERROR_NAME) {
-        return res
-          .status(NOT_FOUND_ERROR_CODE)
-          .send({ message: error.message });
+    .catch(next);
+};
+
+export const login = (
+  req: Request<IUser>,
+  res: Response,
+  next: NextFunction
+) => {
+  const { email, password } = req.body;
+  return User.findOne({ email })
+    .select('+password')
+    .then((user) => {
+      if (!user) {
+        return Promise.reject(new NotFoundError('User not found'));
       }
-      if (error.name === 'ValidationError') {
+      return bcrypt.compare(password, user.password).then((matched) => {
+        if (!matched) {
+          return Promise.reject(
+            new InvalidRequestError('Invalid email or password')
+          );
+        }
+        const token = jwt.sign({ _id: user._id }, SECRET, {
+          expiresIn: '7d',
+        });
         return res
-          .status(INVALID_REQUEST_ERROR_CODE)
-          .send({ message: error.message });
+          .cookie('token', token, { httpOnly: true, maxAge: 604800 })
+          .end();
+      });
+    })
+    .catch(next);
+};
+
+export const getCurrentUser = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const userId = req.user._id;
+
+  return User.findById(userId)
+    .then((user) => {
+      if (!user) {
+        return Promise.reject(new NotFoundError('User not found'));
       }
-      return res.status(DEFAULT_ERROR_CODE).send({ message: 'Server error' });
-    });
+      return res.send(user);
+    })
+    .catch(next);
 };
