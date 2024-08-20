@@ -1,3 +1,4 @@
+import { celebrate, Joi } from 'celebrate';
 import { Router } from 'express';
 import {
   addCardLike,
@@ -11,9 +12,21 @@ const router = Router();
 
 router.get('/', getCards);
 router.post('/', createCard);
-router.delete('/:cardId', deleteCard);
+router.delete(
+  '/:cardId',
+  celebrate({ params: Joi.object().keys({ cardId: Joi.string().length(24) }) }),
+  deleteCard
+);
 
-router.put('/:cardId/likes', addCardLike);
-router.delete('/:cardId/likes', deleteCardLike);
+router.put(
+  '/:cardId/likes',
+  celebrate({ params: Joi.object().keys({ cardId: Joi.string().length(24) }) }),
+  addCardLike
+);
+router.delete(
+  '/:cardId/likes',
+  celebrate({ params: Joi.object().keys({ cardId: Joi.string().length(24) }) }),
+  deleteCardLike
+);
 
 export default router;
