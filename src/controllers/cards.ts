@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { ObjectId } from 'mongoose';
-import { InvalidRequestError, NotFoundError } from '../error';
+import { ForbiddenError, NotFoundError } from '../error';
 import Card, { ICard } from '../models/card';
 
 export const getCards = (req: Request, res: Response, next: NextFunction) =>
@@ -16,7 +16,7 @@ export const createCard = (
   const { name, link } = req.body;
   const owner = req.user._id;
   return Card.create({ name, link, owner })
-    .then((card) => res.send(card))
+    .then((card) => res.status(201).send(card))
     .catch(next);
 };
 
@@ -29,7 +29,7 @@ export const deleteCard = (req: Request, res: Response, next: NextFunction) =>
 
       if (card.owner.toString() !== req.user._id) {
         return Promise.reject(
-          new InvalidRequestError('You can delete only your cards')
+          new ForbiddenError('You can delete only your cards')
         );
       }
 

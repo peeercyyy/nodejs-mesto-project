@@ -1,9 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import isEmail from 'validator/lib/isEmail';
-import { INVALID_REQUEST_ERROR_CODE, SECRET } from '../constants';
-import { EmailExistError, InvalidRequestError, NotFoundError } from '../error';
+import { SECRET } from '../constants';
+import { AuthError, EmailExistError, NotFoundError } from '../error';
 import User, { IUser } from '../models/user';
 
 export const getUsers = (req: Request, res: Response, next: NextFunction) =>
@@ -29,11 +28,7 @@ export const createUser = (
   next: NextFunction
 ) => {
   const { name, about, avatar, email, password } = req.body;
-  if (!isEmail(email)) {
-    return res
-      .status(INVALID_REQUEST_ERROR_CODE)
-      .send({ message: 'Invalid email' });
-  }
+
   return bcrypt
     .hash(password, 10)
     .then((hash: string) =>
@@ -45,12 +40,14 @@ export const createUser = (
         password: hash,
       })
     )
-    .then((user) => res.send({
-      email: user.email,
-      name: user.name,
-      about: user.about,
-      avatar: user.avatar,
-    }))
+    .then((user) =>
+      res.status(201).send({
+        email: user.email,
+        name: user.name,
+        about: user.about,
+        avatar: user.avatar,
+      })
+    )
     .catch((err) => {
       if (err.code === 11000) {
         return next(new EmailExistError('Email already exist'));
@@ -114,13 +111,11 @@ export const login = (
     .select('+password')
     .then((user) => {
       if (!user) {
-        return Promise.reject(new NotFoundError('User not found'));
+        return Promise.reject(new AuthError('Invalid email or password'));
       }
       return bcrypt.compare(password, user.password).then((matched) => {
         if (!matched) {
-          return Promise.reject(
-            new InvalidRequestError('Invalid email or password')
-          );
+          return Promise.reject(new AuthError('Invalid email or password'));
         }
         const token = jwt.sign({ _id: user._id }, SECRET, {
           expiresIn: '7d',
