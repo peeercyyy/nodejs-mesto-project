@@ -1,11 +1,11 @@
 import { celebrate, errors, Joi } from 'celebrate';
 import cookieParser from 'cookie-parser';
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
-import { NOT_FOUND_ERROR_CODE } from './constants';
 import { createUser, login } from './controllers/users';
+import { NotFoundError } from './error';
 import authMiddleware from './middlewares/auth';
 import errorMiddleware from './middlewares/error';
 import { errorLogger, requestLogger } from './middlewares/logger';
@@ -53,8 +53,8 @@ app.use(authMiddleware);
 app.use('/users', userRouter);
 app.use('/cards', cardRouter);
 
-app.use((req: Request, res: Response) =>
-  res.status(NOT_FOUND_ERROR_CODE).send({ message: 'Page not found' })
+app.use('*', (req: Request, res: Response, next: NextFunction) =>
+  next(new NotFoundError('Page not found'))
 );
 app.use(errorLogger);
 app.use(errors()); // обработчик ошибок celebrate

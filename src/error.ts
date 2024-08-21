@@ -47,3 +47,23 @@ export class EmailExistError extends Error implements AppError {
     this.statusCode = 409;
   }
 }
+
+export class ForbiddenError extends Error implements AppError {
+  statusCode: number;
+
+  constructor(public message: string) {
+    super(message);
+    this.name = 'ForbiddenError';
+    this.statusCode = 403;
+  }
+}
+
+export class AuthError extends Error implements AppError {
+  statusCode: number;
+
+  constructor(public message: string) {
+    super(message);
+    this.name = 'AuthError';
+    this.statusCode = 401;
+  }
+}

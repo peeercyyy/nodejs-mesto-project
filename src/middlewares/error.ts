@@ -1,8 +1,14 @@
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { INVALID_REQUEST_ERROR_CODE } from '../constants';
 import { AppError } from '../types/error';
 
-const error = (err: AppError, req: Request, res: Response) => {
+const error = (
+  err: AppError,
+  req: Request,
+  res: Response,
+  // eslint-disable-next-line no-unused-vars
+  next: NextFunction
+) => {
   const { statusCode = 500, message } = err;
 
   if (err.name === 'ValidationError') {
